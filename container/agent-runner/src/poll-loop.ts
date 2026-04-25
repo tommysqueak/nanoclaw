@@ -161,6 +161,14 @@ export async function runPollLoop(config: PollLoopConfig): Promise<void> {
       continue;
     }
 
+    // Auto-transcribe: any audio attachments get inlined as
+    // `[Voice (source): "..."]` so the agent sees text. Source label is
+    // mandatory so the agent can disclose to the user when audio was
+    // processed remotely. Sovereign default is local-only — see
+    // transcription.ts.
+    const { autoTranscribeMessages } = await import('./auto-transcribe.js');
+    keep = await autoTranscribeMessages(keep);
+
     // Format messages: passthrough commands get raw text (only if the
     // provider natively handles slash commands), others get XML.
     const prompt = formatMessagesWithCommands(keep, config.provider.supportsNativeSlashCommands);
@@ -276,9 +284,11 @@ async function processQuery(
   // Stream liveness is decided host-side via the heartbeat file + processing
   // claim age (see src/host-sweep.ts); if something is truly stuck, the host
   // will kill the container and messages get reset to pending.
+  // Async because autoTranscribeMessages does subprocess + HTTP work — the
+  // setInterval callback must be `async` for the await to be legal.
   let pollInFlight = false;
   let endedForCommand = false;
-  const pollHandle = setInterval(() => {
+  const pollHandle = setInterval(async () => {
     if (done || pollInFlight || endedForCommand) return;
     pollInFlight = true;
 
@@ -336,12 +346,15 @@ async function processQuery(
         // claimed messages get released by the host's processing-claim sweep.
         if (done) return;
 
-        const keptIds = keep.map((m) => m.id);
-        const prompt = formatMessages(keep);
+        // Inline transcription on follow-ups too — voice notes can arrive
+        // mid-conversation, not just on the initial batch.
+        const { autoTranscribeMessages } = await import('./auto-transcribe.js');
+        const preprocessed = await autoTranscribeMessages(keep);
+        const prompt = formatMessages(preprocessed);
         log(`Pushing ${keep.length} follow-up message(s) into active query`);
         unwrappedNudged = false;
         query.push(prompt);
-        markCompleted(keptIds);
+        markCompleted(keep.map((m) => m.id));
       } catch (err) {
         // Without this catch the rejection escapes the void IIFE and Node
         // terminates the container on unhandled-rejection. The initial-batch
