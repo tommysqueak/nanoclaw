@@ -90,8 +90,8 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 #     binary (linux-arm64 variant on our image). Without the allowlist
 #     the SDK fails at spawn time with "native binary not found".
 ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+ENV PATH="/pnpm:/pnpm/bin:$PATH"
+RUN corepack enable && mkdir -p "$PNPM_HOME"
 
 RUN --mount=type=cache,target=/root/.cache/pnpm \
     echo "only-built-dependencies[]=agent-browser" > /root/.npmrc && \
@@ -103,6 +103,13 @@ RUN --mount=type=cache,target=/root/.cache/pnpm \
 
 RUN --mount=type=cache,target=/root/.cache/pnpm \
     pnpm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+
+# pnpm's content-addressable store can leave bin/claude.exe as a read-only
+# placeholder. The postinstall downloads the native binary into the optional
+# dep but fails to overwrite the placeholder with EACCES. Fix by running the
+# install script manually after the store is populated.
+RUN CC_DIR="$(find /pnpm/store -path '*/@anthropic-ai/claude-code/*/node_modules/@anthropic-ai/claude-code' -type d | head -1)" && \
+    if [ -n "$CC_DIR" ]; then node "$CC_DIR/install.cjs"; fi
 
 # ---- Entrypoint --------------------------------------------------------------
 COPY entrypoint.sh /app/entrypoint.sh
