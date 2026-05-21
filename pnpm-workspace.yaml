@@ -13,3 +13,5 @@ onlyBuiltDependencies:
 
 pnpm:
   minimumReleaseAge: 4320
+  overrides:
+    '@whiskeysockets/baileys>libsignal': 'libsignal@6.0.0'
