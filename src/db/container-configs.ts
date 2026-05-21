@@ -39,14 +39,41 @@ export function createContainerConfig(config: ContainerConfigRow): void {
     .run(config);
 }
 
+/**
+ * Default MCP servers for all agent groups.
+ * Z.AI services: web-search-prime, web-reader, zread (HTTP via OneCLI proxy),
+ * and zai-mcp-server (stdio, API calls proxied through OneCLI).
+ */
+const DEFAULT_MCP_SERVERS = JSON.stringify({
+  'web-search-prime': {
+    type: 'http',
+    url: 'https://api.z.ai/api/mcp/web_search_prime/mcp',
+  },
+  'web-reader': {
+    type: 'http',
+    url: 'https://api.z.ai/api/mcp/web_reader/mcp',
+  },
+  zread: {
+    type: 'http',
+    url: 'https://api.z.ai/api/mcp/zread/mcp',
+  },
+  'zai-mcp-server': {
+    type: 'stdio',
+    command: 'pnpm',
+    args: ['dlx', '@z_ai/mcp-server'],
+    env: { Z_AI_MODE: 'ZAI' },
+    // Note: API calls to api.z.ai are proxied through OneCLI for auth injection.
+  },
+});
+
 /** Create an empty config row with sensible defaults. Idempotent — no-ops if row exists. */
 export function ensureContainerConfig(agentGroupId: string): void {
   getDb()
     .prepare(
-      `INSERT OR IGNORE INTO container_configs (agent_group_id, updated_at)
-       VALUES (?, ?)`,
+      `INSERT OR IGNORE INTO container_configs (agent_group_id, mcp_servers, updated_at)
+       VALUES (?, ?, ?)`,
     )
-    .run(agentGroupId, new Date().toISOString());
+    .run(agentGroupId, DEFAULT_MCP_SERVERS, new Date().toISOString());
 }
 
 /** Update scalar fields on a config row. Only touches fields present in `updates`. */
