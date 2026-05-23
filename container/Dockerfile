@@ -59,6 +59,7 @@ ARG VERCEL_VERSION=52.2.1
 ARG BUN_VERSION=1.3.12
 ARG WS_VERSION=8.20.0
 ARG WHISPER_MODEL_FILE=ggml-base.en.bin
+ARG GMAIL_MCP_VERSION=1.1.11
 
 # ---- System dependencies -----------------------------------------------------
 # tini: correct PID 1 / signal forwarding so outbound.db writes finalize on
@@ -153,6 +154,11 @@ RUN npm install -g "ws@${WS_VERSION}" && \
 
 RUN --mount=type=cache,target=/root/.cache/pnpm \
     pnpm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+
+RUN --mount=type=cache,target=/root/.cache/pnpm \
+    pnpm install -g \
+        "@gongrzhe/server-gmail-autoauth-mcp@${GMAIL_MCP_VERSION}" \
+        "zod-to-json-schema@3.22.5"
 
 # ---- ncl CLI wrapper ----------------------------------------------------------
 # Actual script lives in the mounted source at /app/src/cli/ncl.ts.
