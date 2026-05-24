@@ -23,6 +23,7 @@ export const TRANSCRIPTION_ENGINE: TranscriptionEngine =
   (process.env.TRANSCRIPTION_ENGINE as TranscriptionEngine) ?? 'whisper';
 export const WHISPER_MODEL_PATH = process.env.WHISPER_MODEL_PATH ?? '/whisper/model.bin';
 export const PARAKEET_MODEL_PATH = process.env.PARAKEET_MODEL_PATH ?? '/parakeet';
+export const PARAKEET_VAD_MODEL_PATH = process.env.PARAKEET_VAD_MODEL_PATH ?? '/parakeet-vad';
 
 export interface TranscriptionResult {
   text: string;
@@ -88,7 +89,11 @@ async function runParakeet(filePath: string): Promise<string> {
   const { wavPath, cleanup } = await toWav(filePath);
   try {
     const scriptPath = path.join(import.meta.dir, 'parakeet-transcribe.py');
-    const { stdout } = await execFileAsync('python3', [scriptPath, PARAKEET_MODEL_PATH, wavPath]);
+    const args = [scriptPath, PARAKEET_MODEL_PATH, wavPath];
+    if (fs.existsSync(PARAKEET_VAD_MODEL_PATH)) {
+      args.push(PARAKEET_VAD_MODEL_PATH);
+    }
+    const { stdout } = await execFileAsync('python3', args);
     const text = stdout.trim();
     if (!text) {
       throw new Error('parakeet produced no output');

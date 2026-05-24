@@ -46,20 +46,25 @@ RUN mkdir -p /whisper-install/share && \
 # ---- Stage 2: parakeet model -------------------------------------------------
 # NVIDIA Parakeet TDT 0.6B v3 (multilingual) ONNX model for onnx-asr.
 # Int8 quantized for CPU. ~670MB total. Only downloaded when INSTALL_PARAKEET=true.
+# Also downloads Silero VAD model (~2MB) for long-form audio splitting.
 FROM debian:bookworm-slim AS parakeet-builder
 ARG INSTALL_PARAKEET=true
 ARG PARAKEET_MODEL_REPO=istupakov/parakeet-tdt-0.6b-v3-onnx
+ARG SILERO_VAD_REPO=istupakov/silero-vad-onnx
 RUN if [ "$INSTALL_PARAKEET" = "true" ]; then \
         apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
         && rm -rf /var/lib/apt/lists/* \
-        && mkdir -p /parakeet \
+        && mkdir -p /parakeet /parakeet-vad \
         && for f in config.json vocab.txt encoder-model.int8.onnx decoder_joint-model.int8.onnx; do \
              curl -fsSL --retry 5 --retry-delay 2 --retry-max-time 300 -C - \
                -o /parakeet/$f \
                "https://huggingface.co/${PARAKEET_MODEL_REPO}/resolve/main/$f"; \
-           done; \
+           done \
+        && curl -fsSL --retry 5 --retry-delay 2 --retry-max-time 60 \
+             -o /parakeet-vad/silero_vad.onnx \
+             "https://huggingface.co/${SILERO_VAD_REPO}/resolve/main/silero_vad.onnx"; \
     else \
-        mkdir -p /parakeet; \
+        mkdir -p /parakeet /parakeet-vad; \
     fi
 
 # ---- Stage 3: runtime --------------------------------------------------------
@@ -200,7 +205,9 @@ ENV WHISPER_MODEL_PATH=/whisper/model.bin
 
 # ---- Parakeet v3 ONNX from builder stage ------------------------------------
 # Python + onnx-asr for CPU inference. Conditional on INSTALL_PARAKEET build arg.
+# Silero VAD model included for long-form audio (>25s) splitting.
 COPY --from=parakeet-builder /parakeet /parakeet
+COPY --from=parakeet-builder /parakeet-vad /parakeet-vad
 RUN if [ -f /parakeet/config.json ]; then \
         apt-get update && apt-get install -y --no-install-recommends python3 python3-pip \
         && rm -rf /var/lib/apt/lists/* \
@@ -208,6 +215,7 @@ RUN if [ -f /parakeet/config.json ]; then \
         && rm -rf /root/.cache/pip; \
     fi
 ENV PARAKEET_MODEL_PATH=/parakeet
+ENV PARAKEET_VAD_MODEL_PATH=/parakeet-vad
 # ---- Entrypoint --------------------------------------------------------------
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
