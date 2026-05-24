@@ -43,12 +43,34 @@ RUN mkdir -p /whisper-install/share && \
         -o /whisper-install/share/${WHISPER_MODEL_FILE} \
         https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${WHISPER_MODEL_FILE}
 
-# ---- Stage 2: runtime --------------------------------------------------------
+# ---- Stage 2: parakeet model -------------------------------------------------
+# NVIDIA Parakeet TDT 0.6B v3 (multilingual) ONNX model for onnx-asr.
+# Int8 quantized for CPU. ~670MB total. Only downloaded when INSTALL_PARAKEET=true.
+FROM debian:bookworm-slim AS parakeet-builder
+ARG INSTALL_PARAKEET=true
+ARG PARAKEET_MODEL_REPO=istupakov/parakeet-tdt-0.6b-v3-onnx
+RUN if [ "$INSTALL_PARAKEET" = "true" ]; then \
+        apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+        && rm -rf /var/lib/apt/lists/* \
+        && mkdir -p /parakeet \
+        && for f in config.json vocab.txt encoder-model.int8.onnx decoder_joint-model.int8.onnx; do \
+             curl -fsSL --retry 5 --retry-delay 2 --retry-max-time 300 -C - \
+               -o /parakeet/$f \
+               "https://huggingface.co/${PARAKEET_MODEL_REPO}/resolve/main/$f"; \
+           done; \
+    else \
+        mkdir -p /parakeet; \
+    fi
+
+# ---- Stage 3: runtime --------------------------------------------------------
 FROM node:22-slim
 
 # ---- Build-time arguments ----------------------------------------------------
 # CJK fonts add ~200MB. Opt in only if you render Chinese/Japanese/Korean text.
 ARG INSTALL_CJK_FONTS=false
+# Parakeet v3 ONNX model adds ~700MB (model + Python + onnx-asr). Opt out with
+# INSTALL_PARAKEET=false to skip.
+ARG INSTALL_PARAKEET=true
 
 # Pin CLI versions for reproducibility. Bump deliberately — unpinned installs
 # mean every rebuild silently picks up the latest and can break in lockstep
@@ -175,6 +197,17 @@ COPY --from=whisper-builder /whisper-install/lib/ /usr/local/lib/
 COPY --from=whisper-builder /whisper-install/share/${WHISPER_MODEL_FILE} /whisper/model.bin
 RUN ldconfig
 ENV WHISPER_MODEL_PATH=/whisper/model.bin
+
+# ---- Parakeet v3 ONNX from builder stage ------------------------------------
+# Python + onnx-asr for CPU inference. Conditional on INSTALL_PARAKEET build arg.
+COPY --from=parakeet-builder /parakeet /parakeet
+RUN if [ -f /parakeet/config.json ]; then \
+        apt-get update && apt-get install -y --no-install-recommends python3 python3-pip \
+        && rm -rf /var/lib/apt/lists/* \
+        && pip3 install --break-system-packages 'onnx-asr[cpu]' \
+        && rm -rf /root/.cache/pip; \
+    fi
+ENV PARAKEET_MODEL_PATH=/parakeet
 # ---- Entrypoint --------------------------------------------------------------
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh

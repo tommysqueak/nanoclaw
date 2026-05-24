@@ -16,9 +16,10 @@ registerTools([
     tool: {
       name: 'transcribe',
       description:
-        'Transcribe an audio file to text via local Whisper inside the container. ' +
+        'Transcribe an audio file to text via local transcription inside the container. ' +
+        'Engine is set by TRANSCRIPTION_ENGINE env var (whisper or parakeet). ' +
         'Sovereign: audio never leaves the machine. Returns the transcript text plus ' +
-        'the source label (local-whisper) and timing for disclosure.',
+        'the source label and timing for disclosure.',
       inputSchema: {
         type: 'object' as const,
         properties: {
