@@ -89,11 +89,12 @@ async function runParakeet(filePath: string): Promise<string> {
   const { wavPath, cleanup } = await toWav(filePath);
   try {
     const scriptPath = path.join(import.meta.dir, 'parakeet-transcribe.py');
-    const args = [scriptPath, PARAKEET_MODEL_PATH, wavPath];
-    if (fs.existsSync(PARAKEET_VAD_MODEL_PATH)) {
-      args.push(PARAKEET_VAD_MODEL_PATH);
-    }
-    const { stdout } = await execFileAsync('python3', args);
+    const args = [scriptPath, wavPath];
+    const env = {
+      PARAKEET_MODEL_PATH,
+      PARAKEET_VAD_MODEL_PATH: fs.existsSync(PARAKEET_VAD_MODEL_PATH) ? PARAKEET_VAD_MODEL_PATH : '',
+    };
+    const { stdout } = await execFileAsync('python3', args, { env: { ...process.env, ...env } });
     const text = stdout.trim();
     if (!text) {
       throw new Error('parakeet produced no output');

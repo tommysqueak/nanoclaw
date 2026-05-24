@@ -211,7 +211,7 @@ COPY --from=parakeet-builder /parakeet-vad /parakeet-vad
 RUN if [ -f /parakeet/config.json ]; then \
         apt-get update && apt-get install -y --no-install-recommends python3 python3-pip \
         && rm -rf /var/lib/apt/lists/* \
-        && pip3 install --break-system-packages 'onnx-asr[cpu]' \
+        && pip3 install --break-system-packages 'onnx-asr[cpu]' 'huggingface_hub' \
         && rm -rf /root/.cache/pip; \
     fi
 ENV PARAKEET_MODEL_PATH=/parakeet
