@@ -20,7 +20,7 @@ const execFileAsync = promisify(execFile);
 
 export type TranscriptionEngine = 'whisper' | 'parakeet';
 export const TRANSCRIPTION_ENGINE: TranscriptionEngine =
-  (process.env.TRANSCRIPTION_ENGINE as TranscriptionEngine) ?? 'whisper';
+  (process.env.TRANSCRIPTION_ENGINE as TranscriptionEngine) ?? 'parakeet';
 export const WHISPER_MODEL_PATH = process.env.WHISPER_MODEL_PATH ?? '/whisper/model.bin';
 export const PARAKEET_MODEL_PATH = process.env.PARAKEET_MODEL_PATH ?? '/parakeet';
 export const PARAKEET_VAD_MODEL_PATH = process.env.PARAKEET_VAD_MODEL_PATH ?? '/parakeet-vad';
